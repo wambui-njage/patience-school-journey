@@ -255,6 +255,10 @@ select.combo-select{
     <div class="brand-mark">PZ</div>
     <div class="brand-text">Njia ya Patience<small>School Selection Journey</small></div>
   </div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <label for="countySelectTop" style="font-size:11px;color:rgba(247,241,228,.7);text-transform:uppercase;letter-spacing:.5px;">Home county</label>
+    <select id="countySelectTop" onchange="setHomeCounty(this.value)" style="background:rgba(247,241,228,.12);color:var(--cream);border:1px solid rgba(247,241,228,.3);border-radius:8px;padding:5px 8px;font-size:12px;font-family:'IBM Plex Mono',monospace;"></select>
+  </div>
   <div class="progress-pill" id="topProgress">
     <span id="progressCount">0 / 12 picked</span>
     <div class="progress-dots" id="progressDots"></div>
@@ -273,7 +277,12 @@ select.combo-select{
     <div class="route-stop">C3</div><div class="route-dash"></div>
     <div class="route-stop">C4</div>
   </div>
-  <p style="font-size:13px;color:var(--ink-soft);max-width:480px;margin:6px auto 30px;">C1 &amp; C2 are your <b style="color:var(--sky)">away picks</b> &mdash; ideally schools outside Embu. C3 &amp; C4 are your <b style="color:var(--rust)">home picks</b> &mdash; right here in Embu County.</p>
+  <p style="font-size:13px;color:var(--ink-soft);max-width:480px;margin:6px auto 12px;">C1 &amp; C2 are your <b style="color:var(--sky)">away picks</b> &mdash; ideally schools outside your home county. C3 &amp; C4 are your <b style="color:var(--rust)">home picks</b> &mdash; right in your own county.</p>
+
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:26px;">
+    <label for="countySelectWelcome" style="font-size:13px;color:var(--ink-soft);">Your home county:</label>
+    <select id="countySelectWelcome" onchange="setHomeCounty(this.value)" style="padding:8px 12px;border-radius:8px;border:1.5px solid var(--line);font-size:14px;font-family:'Public Sans',sans-serif;background:#fff;color:var(--ink);"></select>
+  </div>
 
   <button class="btn" onclick="startJourney()">Begin my selection &rarr;</button>
 </section>
@@ -306,7 +315,7 @@ select.combo-select{
 const DATA = JSON.parse(document.getElementById('raw-data').textContent);
 const COMBOS = DATA.combos;
 const SCHOOLS = DATA.schools;
-const HOME_COUNTY = "EMBU";
+const HOME_COUNTY_DEFAULT = "EMBU";
 const CLUSTERS = ["C1","C2","C3","C4"];
 const STORAGE_KEY = "patience_school_journey_v1";
 
@@ -319,6 +328,7 @@ SCHOOLS.forEach(s=>{
 });
 
 let state = {
+  homeCounty: HOME_COUNTY_DEFAULT,
   groups: [
     {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false}},
     {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false}},
@@ -326,6 +336,24 @@ let state = {
   ],
   activeGroup:0
 };
+
+const ALL_COUNTIES = [...new Set(SCHOOLS.map(s=>s.county.toUpperCase()))].sort();
+
+function populateCountySelectors(){
+  const opts = ALL_COUNTIES.map(c=>'<option value="'+c+'" '+(c===state.homeCounty?'selected':'')+'>'+c.charAt(0)+c.slice(1).toLowerCase()+'</option>').join('');
+  const top = document.getElementById('countySelectTop');
+  const welcome = document.getElementById('countySelectWelcome');
+  if(top) top.innerHTML = opts;
+  if(welcome) welcome.innerHTML = opts;
+}
+
+function setHomeCounty(county){
+  state.homeCounty = county.toUpperCase();
+  save();
+  populateCountySelectors();
+  renderAll();
+  showToast('Home county set to '+county.charAt(0)+county.slice(1).toLowerCase());
+}
 
 function load(){
   try{
@@ -397,9 +425,9 @@ function schoolsFor(comboCode, cluster, group){
   if(!comboCode) return [];
   let list = (byCombo[comboCode]||[]).filter(s=>s.cluster===cluster);
   if(cluster==='C3' || cluster==='C4'){
-    list = list.filter(s=>s.county.toUpperCase()===HOME_COUNTY);
+    list = list.filter(s=>s.county.toUpperCase()===state.homeCounty);
   } else {
-    if(!group.includeHome[cluster]) list = list.filter(s=>s.county.toUpperCase()!==HOME_COUNTY);
+    if(!group.includeHome[cluster]) list = list.filter(s=>s.county.toUpperCase()!==state.homeCounty);
   }
   if(group.genderOnly[cluster]){
     list = list.filter(s=>s.gender==='GIRLS');
@@ -471,6 +499,11 @@ function sanitizeDuplicateCombos(){
       }
     }
   });
+}
+
+function homeCountyLabel(){
+  const c = state.homeCounty;
+  return c.charAt(0)+c.slice(1).toLowerCase();
 }
 
 function comboCompleteness(comboCode, group){
@@ -578,7 +611,7 @@ function renderStopCard(g, gi, cluster){
   const tag=document.createElement('span');
   const isHome = cluster==='C3'||cluster==='C4';
   tag.className='stop-tag'+(isHome?' home':'');
-  tag.textContent = isHome? 'Home · Embu':'Away pick';
+  tag.textContent = isHome? 'Home · '+homeCountyLabel():'Away pick';
   head.appendChild(tag);
   card.appendChild(head);
 
@@ -591,8 +624,8 @@ function renderStopCard(g, gi, cluster){
   const sub=document.createElement('div');
   sub.className='stop-sub';
   sub.textContent = isHome
-    ? 'Only Embu County schools shown.'
-    : 'Schools outside Embu by default.';
+    ? 'Only '+homeCountyLabel()+' County schools shown.'
+    : 'Schools outside '+homeCountyLabel()+' by default.';
   card.appendChild(sub);
 
   if(!isHome){
@@ -603,7 +636,7 @@ function renderStopCard(g, gi, cluster){
     cb.checked = g.includeHome[cluster];
     cb.onchange=()=>{ g.includeHome[cluster]=cb.checked; save(); renderPanels(); updateProgress(); };
     toggleWrap.appendChild(cb);
-    toggleWrap.append('Also show Embu schools here');
+    toggleWrap.append('Also show '+homeCountyLabel()+' schools here');
     card.appendChild(toggleWrap);
   }
 
@@ -723,7 +756,9 @@ function hideReview(){
 
 load();
 sanitizeDuplicateCombos();
+if(!state.homeCounty) state.homeCounty = HOME_COUNTY_DEFAULT;
 save();
+populateCountySelectors();
 renderAll();
 if(totalPicked()>0){ startJourney(); }
 </script>
