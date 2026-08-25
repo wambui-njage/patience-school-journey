@@ -238,7 +238,7 @@ let state = {
 };
 
 function freshGroup(){
-  return {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, prPick:null, showPR:false, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false,PR:true}};
+  return {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, prPick:null, showPR:true, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false,PR:true}};
 }
 
 function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw){ state = JSON.parse(raw); } }catch(e){} }
