@@ -238,7 +238,7 @@ let state = {
 };
 
 function freshGroup(){
-  return {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false}};
+  return {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, prPick:null, showPR:false, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false,PR:true}};
 }
 
 function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw){ state = JSON.parse(raw); } }catch(e){} }
@@ -352,6 +352,18 @@ function latestScore(s){
   return s.kcse_history.reduce((a,b)=> b.year>a.year ? b : a);
 }
 
+function schoolsForPR(comboCode, group){
+  if(!comboCode) return [];
+  let list = (byCombo[comboCode]||[]).filter(s=>s.cluster==='PR');
+  if(group.genderOnly.PR){ list = list.filter(s=>s.gender==='GIRLS'); }
+  return list.sort((a,b)=>{
+    const aL=latestScore(a), bL=latestScore(b);
+    if(aL && bL) return bL.mean - aL.mean;
+    if(!!aL !== !!bL) return aL ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function schoolsFor(comboCode, cluster, group){
   if(!comboCode) return [];
   let list = (byCombo[comboCode]||[]).filter(s=>s.cluster===cluster);
@@ -453,8 +465,18 @@ function renderPanels(){
     }
     picker.appendChild(note);
 
+    const prToggleWrap=document.createElement('label');
+    prToggleWrap.className='stop-toggle';
+    prToggleWrap.style.cssText='margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);';
+    const prCb=document.createElement('input'); prCb.type='checkbox'; prCb.checked = g.showPR;
+    prCb.onchange=()=>{ g.showPR = prCb.checked; save(); renderPanels(); };
+    prToggleWrap.appendChild(prCb);
+    prToggleWrap.append(' Also browse Private (PR) schools — optional, just to see what exists. Doesn\'t count toward your 12.');
+    picker.appendChild(prToggleWrap);
+
     const grid=document.createElement('div'); grid.className='stops-grid';
     CLUSTERS.forEach(cluster=>{ grid.appendChild(renderStopCard(g, i, cluster)); });
+    if(g.showPR){ grid.appendChild(renderPRCard(g, i)); }
     panel.appendChild(picker); panel.appendChild(grid);
     panelsEl.appendChild(panel);
   });
@@ -533,6 +555,64 @@ function renderStopCard(g, gi, cluster){
   return card;
 }
 
+function renderPRCard(g, gi){
+  const card=document.createElement('div');
+  const picked = g.prPick;
+  card.className='stop-card'+(picked?' filled':'');
+  card.style.cssText='border-style:dashed;border-color:var(--gold-deep);background:var(--cream-dim);';
+  const head=document.createElement('div'); head.className='stop-head';
+  const badge=document.createElement('span'); badge.className='cluster-badge';
+  badge.style.background='var(--gold-deep)'; badge.textContent='PR';
+  head.appendChild(badge);
+  const tag=document.createElement('span'); tag.className='stop-tag';
+  tag.style.color='var(--gold-deep)'; tag.textContent='Optional · not counted';
+  head.appendChild(tag); card.appendChild(head);
+
+  const sub=document.createElement('div'); sub.className='stop-sub';
+  sub.textContent = 'Private schools nationwide, for browsing only — this pick won\'t count toward your 12.';
+  card.appendChild(sub);
+
+  const genderWrap=document.createElement('label'); genderWrap.className='stop-toggle';
+  const gcb=document.createElement('input'); gcb.type='checkbox'; gcb.checked=g.genderOnly.PR;
+  gcb.onchange=()=>{ g.genderOnly.PR=gcb.checked; save(); renderPanels(); };
+  genderWrap.appendChild(gcb); genderWrap.append('Girls-only schools');
+  card.appendChild(genderWrap);
+
+  if(picked){
+    const pickedBox=document.createElement('div'); pickedBox.className='stop-picked';
+    let scoreLine = '';
+    if(picked.kcse_history && picked.kcse_history.length){
+      const sorted = [...picked.kcse_history].sort((a,b)=>b.year-a.year);
+      scoreLine = '<br>KCSE mean: '+sorted.map(h=>'<b>'+h.mean.toFixed(3)+'</b> ('+h.year+')').join(', ');
+    }
+    pickedBox.innerHTML = '<b>'+picked.name+'</b>'+picked.county+' &middot; '+picked.gender+' &middot; '+picked.accom+scoreLine;
+    const clearBtn=document.createElement('button'); clearBtn.className='clear-link'; clearBtn.textContent='Clear pick';
+    clearBtn.onclick=()=>{ g.prPick=null; save(); renderAll(); };
+    pickedBox.appendChild(clearBtn); card.appendChild(pickedBox);
+  } else {
+    const search=document.createElement('input'); search.className='stop-search'; search.placeholder='Search school name…';
+    const listEl=document.createElement('div'); listEl.className='stop-list';
+    function renderList(filterText){
+      const list = g.combo ? schoolsForPR(g.combo, g) : [];
+      const filtered = filterText ? list.filter(s=>s.name.toUpperCase().includes(filterText.toUpperCase())) : list;
+      listEl.innerHTML='';
+      if(!g.combo){ listEl.innerHTML='<div class="stop-empty">Choose a combination above first.</div>'; return; }
+      if(filtered.length===0){ listEl.innerHTML='<div class="stop-empty">No private schools found for this combo yet.</div>'; return; }
+      filtered.forEach(s=>{
+        const row=document.createElement('div'); row.className='school-row';
+        const ls = latestScore(s);
+        const scoreBadge = ls ? ' <span class="mono" style="background:var(--gold);color:var(--forest);padding:1px 6px;border-radius:5px;font-size:10px;">'+ls.mean.toFixed(2)+' \''+String(ls.year).slice(2)+'</span>' : '';
+        row.innerHTML='<span class="sname">'+s.name+scoreBadge+'</span><span class="smeta">'+s.county+' · '+s.gender+' · '+s.accom+'</span>';
+        row.onclick=()=>{ g.prPick=s; save(); renderAll(); };
+        listEl.appendChild(row);
+      });
+    }
+    search.oninput=(e)=>renderList(e.target.value);
+    card.appendChild(search); card.appendChild(listEl); renderList('');
+  }
+  return card;
+}
+
 function renderAll(){ renderTabs(); renderPanels(); updateProgress(); }
 
 function showReview(){
@@ -560,7 +640,20 @@ function showReview(){
       } else { st.innerHTML='<div class="stamp-cluster">'+c+'</div><div class="stamp-name">Not picked yet</div>'; }
       row.appendChild(st);
     });
-    page.appendChild(row); pagesEl.appendChild(page);
+    page.appendChild(row);
+    if(g.prPick){
+      const s = g.prPick;
+      const prBox = document.createElement('div');
+      prBox.style.cssText='margin-top:12px;padding:10px 14px;border:1.5px dashed var(--gold-deep);border-radius:10px;background:var(--cream-dim);font-size:12px;';
+      let scoreLine = '';
+      if(s.kcse_history && s.kcse_history.length){
+        const sorted = [...s.kcse_history].sort((a,b)=>b.year-a.year);
+        scoreLine = ' · KCSE: '+sorted.map(h=>h.mean.toFixed(2)+' \''+String(h.year).slice(2)).join(', ');
+      }
+      prBox.innerHTML = '<b style="color:var(--gold-deep);">Optional PR browse:</b> '+s.name+' — '+s.county+' · '+s.gender+' · '+s.accom+scoreLine+' <i>(not part of your 12)</i>';
+      page.appendChild(prBox);
+    }
+    pagesEl.appendChild(page);
   });
 }
 function hideReview(){ document.getElementById('review').classList.remove('active'); document.getElementById('app').classList.add('active'); }
