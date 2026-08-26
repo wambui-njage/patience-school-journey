@@ -175,14 +175,14 @@ select.combo-select{width:100%;padding:12px 14px;border-radius:10px;border:1.5px
   <span class="eyebrow">Grade 10 &middot; Senior School</span>
   <h1>Karibu, <em>Patience Zawadi</em>.</h1>
   <p class="lede">We are so proud of you, Patience, and we love you — whatever you choose, we're with you every step of the way.<br><span style="font-style:italic;">— The Njages</span></p>
-  <p class="lede">This is your journey to Senior School. First you'll choose your <b>pathway</b>, then pick <b>3 subject combinations</b> within it, and for each one, choose <b>4 schools</b> &mdash; one from every category, C1 through C4. By the end you'll have your full list of 12, ready to enter on your official form.</p>
+  <p class="lede">This is your journey to Senior School. First you'll choose your <b>pathway</b>, then pick <b>3 subject combinations</b> within it, and for each one, choose <b>8 schools</b> &mdash; 3 from C1, 2 from C2, 2 from C3, and 1 from C4. By the end you'll have your full list of 24, ready to enter on your official form.</p>
   <button class="btn" onclick="openPathwayPicker()" style="margin-top:30px;">Begin my selection &rarr;</button>
 </section>
 
 <section id="pathwayPicker">
   <span class="eyebrow">Step 1 of 3</span>
   <h2 style="font-size:32px;color:var(--forest);">Which pathway is this for?</h2>
-  <p style="color:var(--ink-soft);margin-top:8px;">Pick one — all 3 of your subject combinations and 12 schools will come from this pathway.</p>
+  <p style="color:var(--ink-soft);margin-top:8px;">Pick one — all 3 of your subject combinations and 24 schools will come from this pathway.</p>
   <div class="pathway-grid" id="pathwayGrid"></div>
   <div style="margin-top:26px;">
     <button class="btn ghost" onclick="goWelcome()">&larr; Back</button>
@@ -195,14 +195,14 @@ select.combo-select{width:100%;padding:12px 14px;border-radius:10px;border:1.5px
   <div class="group-footer">
     <button class="btn ghost" onclick="openPathwayPicker()">&larr; Change pathway</button>
     <button class="btn ghost" id="clearAllBtn" onclick="clearAllGroups()" style="color:var(--rust);border-color:var(--rust);">Clear all 3 groups</button>
-    <button class="btn" id="reviewBtn" onclick="showReview()" disabled>Review my 12 schools &rarr;</button>
+    <button class="btn" id="reviewBtn" onclick="showReview()" disabled>Review my 24 schools &rarr;</button>
   </div>
 </div>
 
 <div id="review">
   <div class="review-head">
     <span class="eyebrow">Final list</span>
-    <h2>Patience's 12 schools</h2>
+    <h2>Patience's 24 schools</h2>
     <p>Copy these onto your KEMIS selection form &mdash; grouped exactly as you'll enter them.</p>
   </div>
   <div id="passportPages"></div>
@@ -219,6 +219,9 @@ const COMBOS = DATA.combos;
 const SCHOOLS = DATA.schools;
 const HOME_COUNTY_DEFAULT = "EMBU";
 const CLUSTERS = ["C1","C2","C3","C4"];
+const REQUIRED = {C1:3, C2:2, C3:2, C4:1};
+const TOTAL_PER_GROUP = Object.values(REQUIRED).reduce((a,b)=>a+b,0); // 8
+const TOTAL_ALL = TOTAL_PER_GROUP * 3; // 24
 const STORAGE_KEY = "patience_school_journey_v2";
 
 const PATHWAY_META = {
@@ -238,7 +241,7 @@ let state = {
 };
 
 function freshGroup(){
-  return {combo:null, picks:{C1:null,C2:null,C3:null,C4:null}, prPick:null, showPR:true, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false,PR:true}};
+  return {combo:null, picks:{C1:[],C2:[],C3:[],C4:[]}, prPick:null, showPR:true, includeHome:{C1:false,C2:false}, genderOnly:{C1:true,C2:true,C3:true,C4:false,PR:true}};
 }
 
 function load(){ try{ const raw = localStorage.getItem(STORAGE_KEY); if(raw){ state = JSON.parse(raw); } }catch(e){} }
@@ -340,7 +343,7 @@ function usedCombosExcept(groupIndex){
 }
 function sanitizeDuplicateCombos(){
   const seen = new Set();
-  state.groups.forEach(g=>{ if(g.combo){ if(seen.has(g.combo)){ g.combo=null; CLUSTERS.forEach(c=>g.picks[c]=null);} else { seen.add(g.combo);} } });
+  state.groups.forEach(g=>{ if(g.combo){ if(seen.has(g.combo)){ g.combo=null; CLUSTERS.forEach(c=>g.picks[c]=[]);} else { seen.add(g.combo);} } });
 }
 
 function accomRank(accom){
@@ -380,7 +383,7 @@ function schoolsFor(comboCode, cluster, group){
 }
 
 function comboCompleteness(comboCode, group){
-  const missing = CLUSTERS.filter(cluster => schoolsFor(comboCode, cluster, group).length===0);
+  const missing = CLUSTERS.filter(cluster => schoolsFor(comboCode, cluster, group).length < REQUIRED[cluster]);
   return {complete: missing.length===0, missing};
 }
 
@@ -388,24 +391,24 @@ function combosForPathway(){
   return Object.keys(COMBOS).filter(code=>COMBOS[code].pathway===state.pathway);
 }
 
-function totalPicked(){ let n=0; state.groups.forEach(g=>CLUSTERS.forEach(c=>{ if(g.picks[c]) n++; })); return n; }
+function totalPicked(){ let n=0; state.groups.forEach(g=>CLUSTERS.forEach(c=>{ n += g.picks[c].length; })); return n; }
 
 function updateProgress(){
   const n = totalPicked();
-  document.getElementById('progressCount').textContent = n+" / 12 picked";
+  document.getElementById('progressCount').textContent = n+" / "+TOTAL_ALL+" picked";
   const dotsEl = document.getElementById('progressDots'); dotsEl.innerHTML='';
-  for(let i=0;i<12;i++){ const d=document.createElement('span'); if(i<n) d.className='filled'; dotsEl.appendChild(d); }
-  document.getElementById('reviewBtn').disabled = n<12;
+  for(let i=0;i<TOTAL_ALL;i++){ const d=document.createElement('span'); if(i<n) d.className='filled'; dotsEl.appendChild(d); }
+  document.getElementById('reviewBtn').disabled = n<TOTAL_ALL;
 }
 
 function renderTabs(){
   const tabsEl = document.getElementById('groupTabs'); tabsEl.innerHTML='';
   state.groups.forEach((g,i)=>{
-    const filled = CLUSTERS.filter(c=>g.picks[c]).length;
-    const complete = filled===4;
+    const filled = CLUSTERS.reduce((n,c)=>n+g.picks[c].length,0);
+    const complete = filled===TOTAL_PER_GROUP;
     const tab=document.createElement('button');
     tab.className='tab'+(i===state.activeGroup?' active':'')+(complete?' complete':'');
-    tab.innerHTML = 'Group '+(i+1)+' <span class="count">'+filled+'/4</span>';
+    tab.innerHTML = 'Group '+(i+1)+' <span class="count">'+filled+'/'+TOTAL_PER_GROUP+'</span>';
     tab.onclick=()=>{ state.activeGroup=i; renderAll(); };
     tabsEl.appendChild(tab);
   });
@@ -451,7 +454,7 @@ function renderPanels(){
       opts += '<option value="'+item.code+'" '+(g.combo===item.code?'selected':'')+'>'+prefix+'['+item.track+'] '+item.subjects+suffix+'</option>';
     });
     sel.innerHTML = opts;
-    sel.onchange=(e)=>{ g.combo = e.target.value || null; CLUSTERS.forEach(c=>g.picks[c]=null); save(); renderAll(); };
+    sel.onchange=(e)=>{ g.combo = e.target.value || null; CLUSTERS.forEach(c=>g.picks[c]=[]); save(); renderAll(); };
     picker.appendChild(sel);
 
     const note=document.createElement('div'); note.className='combo-note';
@@ -484,8 +487,10 @@ function renderPanels(){
 
 function renderStopCard(g, gi, cluster){
   const card=document.createElement('div');
-  const picked = g.picks[cluster];
-  card.className='stop-card'+(picked?' filled':'');
+  const pickedList = g.picks[cluster];
+  const need = REQUIRED[cluster];
+  const isFull = pickedList.length >= need;
+  card.className='stop-card'+(isFull?' filled':'');
   const head=document.createElement('div'); head.className='stop-head';
   const badge=document.createElement('span'); badge.className='cluster-badge'; badge.textContent=cluster;
   head.appendChild(badge);
@@ -493,6 +498,11 @@ function renderStopCard(g, gi, cluster){
   const tag=document.createElement('span'); tag.className='stop-tag'+(isHome?' home':'');
   tag.textContent = isHome? 'Home · '+homeCountyLabel():'Away pick';
   head.appendChild(tag); card.appendChild(head);
+
+  const reqLine=document.createElement('div'); reqLine.className='mono';
+  reqLine.style.cssText='font-size:11px;color:var(--rust);font-weight:600;margin-bottom:4px;';
+  reqLine.textContent = 'Pick '+need+' for '+cluster+' — '+pickedList.length+'/'+need+' chosen';
+  card.appendChild(reqLine);
 
   const comboStamp=document.createElement('div'); comboStamp.className='mono';
   comboStamp.style.cssText='font-size:11px;color:var(--sky);margin-bottom:8px;';
@@ -517,35 +527,47 @@ function renderStopCard(g, gi, cluster){
   genderWrap.appendChild(gcb); genderWrap.append('Girls-only schools');
   card.appendChild(genderWrap);
 
-  if(picked){
-    const pickedBox=document.createElement('div'); pickedBox.className='stop-picked';
-    let scoreLine = '';
-    if(picked.kcse_history && picked.kcse_history.length){
-      const sorted = [...picked.kcse_history].sort((a,b)=>b.year-a.year);
-      scoreLine = '<br>KCSE mean: '+sorted.map(h=>'<b>'+h.mean.toFixed(3)+'</b> ('+h.year+')').join(', ');
-    }
-    pickedBox.innerHTML = '<b>'+picked.name+'</b>'+picked.county+' &middot; '+picked.gender+' &middot; '+picked.accom+scoreLine;
-    const clearBtn=document.createElement('button'); clearBtn.className='clear-link'; clearBtn.textContent='Clear pick';
-    clearBtn.onclick=()=>{ g.picks[cluster]=null; save(); renderAll(); };
-    pickedBox.appendChild(clearBtn); card.appendChild(pickedBox);
-  } else {
-    const search=document.createElement('input'); search.className='stop-search'; search.placeholder='Search school name…';
+  // Show already-picked schools for this cluster, each with its own clear button
+  if(pickedList.length){
+    const pickedWrap=document.createElement('div'); pickedWrap.style.cssText='margin-bottom:8px;';
+    pickedList.forEach((picked, idx)=>{
+      const pickedBox=document.createElement('div'); pickedBox.className='stop-picked';
+      pickedBox.style.marginTop = idx>0 ? '6px' : '10px';
+      let scoreLine = '';
+      if(picked.kcse_history && picked.kcse_history.length){
+        const sorted = [...picked.kcse_history].sort((a,b)=>b.year-a.year);
+        scoreLine = '<br>KCSE mean: '+sorted.map(h=>'<b>'+h.mean.toFixed(3)+'</b> ('+h.year+')').join(', ');
+      }
+      pickedBox.innerHTML = '<b>'+picked.name+'</b>'+picked.county+' &middot; '+picked.gender+' &middot; '+picked.accom+scoreLine;
+      const clearBtn=document.createElement('button'); clearBtn.className='clear-link'; clearBtn.textContent='Clear pick';
+      clearBtn.onclick=()=>{ g.picks[cluster] = g.picks[cluster].filter((_,j)=>j!==idx); save(); renderAll(); };
+      pickedBox.appendChild(clearBtn); pickedWrap.appendChild(pickedBox);
+    });
+    card.appendChild(pickedWrap);
+  }
+
+  // Show search/list to add more, if still under the required count
+  if(!isFull){
+    const search=document.createElement('input'); search.className='stop-search';
+    search.placeholder = pickedList.length ? 'Search to add another…' : 'Search school name…';
     const sortNote=document.createElement('div');
     sortNote.style.cssText='font-size:10.5px;color:var(--ink-soft);margin-bottom:6px;line-height:1.4;';
     sortNote.innerHTML='Schools with a real KCSE mean score sort first, highest first. Everyone else falls back to boarding-first, since <b>no official performance data exists for most individual schools.</b>';
     const listEl=document.createElement('div'); listEl.className='stop-list';
     function renderList(filterText){
-      const list = g.combo ? schoolsFor(g.combo, cluster, g) : [];
+      let list = g.combo ? schoolsFor(g.combo, cluster, g) : [];
+      const alreadyPicked = new Set(pickedList.map(p=>p.name.toUpperCase()));
+      list = list.filter(s=>!alreadyPicked.has(s.name.toUpperCase()));
       const filtered = filterText ? list.filter(s=>s.name.toUpperCase().includes(filterText.toUpperCase())) : list;
       listEl.innerHTML='';
       if(!g.combo){ listEl.innerHTML='<div class="stop-empty">Choose a combination above first.</div>'; return; }
-      if(filtered.length===0){ listEl.innerHTML='<div class="stop-empty">No schools match yet — try widening your filters.</div>'; return; }
+      if(filtered.length===0){ listEl.innerHTML='<div class="stop-empty">No more schools match yet — try widening your filters.</div>'; return; }
       filtered.forEach(s=>{
         const row=document.createElement('div'); row.className='school-row';
         const ls = latestScore(s);
         const scoreBadge = ls ? ' <span class="mono" style="background:var(--gold);color:var(--forest);padding:1px 6px;border-radius:5px;font-size:10px;">'+ls.mean.toFixed(2)+' \''+String(ls.year).slice(2)+'</span>' : '';
         row.innerHTML='<span class="sname">'+s.name+scoreBadge+'</span><span class="smeta">'+s.county+' · '+s.gender+' · '+s.accom+'</span>';
-        row.onclick=()=>{ g.picks[cluster]=s; save(); renderAll(); };
+        row.onclick=()=>{ g.picks[cluster] = [...g.picks[cluster], s]; save(); renderAll(); };
         listEl.appendChild(row);
       });
     }
@@ -627,18 +649,22 @@ function showReview(){
       '<div class="combo-line">Combination code: <span class="mono">'+(g.combo||'—')+'</span></div>';
     const row=document.createElement('div'); row.className='stamps-row';
     CLUSTERS.forEach(c=>{
-      const s=g.picks[c];
-      const st=document.createElement('div'); st.className='stamp'+(s?'':' empty');
-      if(s){
-        let scoreLine = '';
-        if(s.kcse_history && s.kcse_history.length){
-          const sorted = [...s.kcse_history].sort((a,b)=>b.year-a.year);
-          scoreLine = '<br>KCSE: '+sorted.map(h=>h.mean.toFixed(2)+' \''+String(h.year).slice(2)).join(', ');
-        }
-        st.innerHTML='<div class="stamp-cluster">'+c+'</div><div class="stamp-name">'+s.name+'</div>'+
-          '<div class="stamp-meta">'+s.county+'<br>'+s.gender+' · '+s.accom+scoreLine+'</div>';
-      } else { st.innerHTML='<div class="stamp-cluster">'+c+'</div><div class="stamp-name">Not picked yet</div>'; }
-      row.appendChild(st);
+      const need = REQUIRED[c];
+      const arr = g.picks[c];
+      for(let slot=0; slot<need; slot++){
+        const s = arr[slot];
+        const st=document.createElement('div'); st.className='stamp'+(s?'':' empty');
+        if(s){
+          let scoreLine = '';
+          if(s.kcse_history && s.kcse_history.length){
+            const sorted = [...s.kcse_history].sort((a,b)=>b.year-a.year);
+            scoreLine = '<br>KCSE: '+sorted.map(h=>h.mean.toFixed(2)+' \''+String(h.year).slice(2)).join(', ');
+          }
+          st.innerHTML='<div class="stamp-cluster">'+c+' &middot; '+(slot+1)+'/'+need+'</div><div class="stamp-name">'+s.name+'</div>'+
+            '<div class="stamp-meta">'+s.county+'<br>'+s.gender+' · '+s.accom+scoreLine+'</div>';
+        } else { st.innerHTML='<div class="stamp-cluster">'+c+' &middot; '+(slot+1)+'/'+need+'</div><div class="stamp-name">Not picked yet</div>'; }
+        row.appendChild(st);
+      }
     });
     page.appendChild(row);
     if(g.prPick){
@@ -650,7 +676,7 @@ function showReview(){
         const sorted = [...s.kcse_history].sort((a,b)=>b.year-a.year);
         scoreLine = ' · KCSE: '+sorted.map(h=>h.mean.toFixed(2)+' \''+String(h.year).slice(2)).join(', ');
       }
-      prBox.innerHTML = '<b style="color:var(--gold-deep);">Optional PR browse:</b> '+s.name+' — '+s.county+' · '+s.gender+' · '+s.accom+scoreLine+' <i>(not part of your 12)</i>';
+      prBox.innerHTML = '<b style="color:var(--gold-deep);">Optional PR browse:</b> '+s.name+' — '+s.county+' · '+s.gender+' · '+s.accom+scoreLine+' <i>(not part of your '+TOTAL_PER_GROUP+')</i>';
       page.appendChild(prBox);
     }
     pagesEl.appendChild(page);
